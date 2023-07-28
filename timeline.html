@@ -1,0 +1,297 @@
+<html>
+<script src='https://d3js.org/d3.v5.min.js'></script>
+<script src="https://rawgit.com/susielu/d3-annotation/master/d3-annotation.min.js"></script>
+<style>
+    .spacebetween {
+        display: flex;
+        justify-content:space-between;
+    }
+    .padLeft {
+        padding-left: 5px;
+    }
+    .metric {
+        font-weight: bold;
+    }
+    .timelineRoot {
+        display: flex;
+        width: 450px;
+        height: 50px;
+        margin: 0 auto;
+    }
+    .leftBox {
+        width: 150px;
+        height: 50px;
+        background-color: gray;
+        margin-left: 0;
+        display: inline-grid;
+        align-items: center;
+        justify-content: center;
+    }
+    .tooltipRoot{
+        display: grid;
+        gap: 2px;
+    }
+    .alignRight {
+        margin-right: 0;
+    }
+    .centerBox {
+        width: 150px;
+        height: 50px;
+        display: inline-grid;
+        align-items: center;
+        justify-content: center;
+        background-color: #C7F2FF;
+    }
+    .rightBox {
+        width: 150px;
+        height: 50px;
+        background-color: gray;
+        display: inline-grid;
+        align-items: center;
+        justify-content: center;
+    }
+    .analysisBlock {
+        background-color: lightpink;
+        width: 1000px;
+        height: auto;
+        border-color: pink;
+        padding: 10px 0px 0px 10px;
+        border: solid;
+        border-width: 2px;
+        border-radius: 5px;
+    }
+    .bluelink {
+        color: blueviolet;
+    }
+</style>
+<body onload='init()'>
+<h1>Timeline of CSGO Cases</h1>
+<p>Understand how at different points rarity (quantity) and price are correlated.</p>
+<p>How does the price of different items vary with rarity?</p>  
+    You are currently at the <span class="metric" id="currentDate"></span> snapshot.  Click on the timeline to move forwards and backwards. Click on a datapoint to get a history of that case in specific. Click <a href="index.html">here</a> to go back to the birds eye view.
+</p>
+<div class="timelineRoot">
+    <div class="leftBox" id="prevBox"><span>Start of timeline</span></div>
+    <div class="centerBox">
+        <span>Present:</span><span class="metric" id="cd2"></span>
+    </div>
+    <div class="rightBox" id="nextBox"><span>End of Timeline</span></div>
+</div>
+
+
+<svg width=1400 height=600></svg>
+<div id = "tooltip"></div>
+<div class="analysisBlock">Snapshots reveal that there is a inverse relationship between price and quantity in the steam market.  For market cap, typically cases that are on the cheaper side with higher volume have a generally higher market cap while there are both cheap and plentiful creates and expensive and scarce crates.  </p>
+<script>
+async function init() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const snapIndexPresanitized = Number(urlParams.get('snap')) || 0;
+    const data = await d3.csv(
+        'https://gist.githubusercontent.com/ashdawngary/526a81dc3e337ff075f89e0cfe4b9075/raw/cb60ce07b4290881badd3cca1c0f21bfb42ff17d/case_samples.csv',
+        (d) => ({
+                    date: d3.timeParse("%m/%d/%Y")(d.date),
+                    datestr: d.date,
+                    case: d.case,
+                    price: +d.price,
+                    volume: +d.volume
+                }));
+    function round2(num) {
+        return Math.round(num * 100) / 100;
+    }
+    function MoneyFormat(labelValue) 
+    {
+    // Nine Zeroes for Billions
+    return Math.abs(Number(labelValue)) >= 1.0e+9
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+9) + "B"
+        // Six Zeroes for Millions 
+        : Math.abs(Number(labelValue)) >= 1.0e+6
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+6) + "M"
+        // Three Zeroes for Thousands
+        : Math.abs(Number(labelValue)) >= 1.0e+3
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+3) + "K"
+
+        : round2(Math.abs(Number(labelValue)));
+
+    }
+
+    var tooltip = d3.select('#tooltip')
+                    .style("opacity", 0)
+                    .style('position', 'absolute')
+                    .attr("class", "tooltip")
+                    .style("background-color", "#eafbea")
+                    .style("border", "solid")
+                    .style("border-width", "2px")
+                    .style("border-radius", "5px")
+                    .style("border-color", '#D3D3D3')
+                    .style("padding", "5px");
+
+    var all_dates = data.map(d => d.datestr);
+    var map_dates = [...new Set(all_dates)];
+    const zip = (...arrays) => {
+        const length = Math.min(...arrays.map(arr => arr.length));
+        return Array.from({ length }, (value, index) => arrays.map((array => array[index])));
+    };
+    const original_dates = map_dates.map(mpd => data.find(dp => (dp.datestr === mpd)).date);
+    var all_mktcps = map_dates.map(d => data.filter(dp => (dp.datestr === d)).reduce((a, b) => a + b.volume * b.price, 0))
+    const all_data = zip(original_dates, map_dates, all_mktcps).sort((a, b) => a[0]-b[0]);
+    const snapIndex = Math.min(Math.max(snapIndexPresanitized, 0), all_data.length-1);
+    const selected_point = all_data[snapIndex];
+    document.getElementById("currentDate").innerText = selected_point[1];
+    document.getElementById("cd2").innerText = selected_point[1];
+
+    if (snapIndex > 0) {
+        const prev_point = all_data[snapIndex-1];
+        document.getElementById("prevBox").innerText = ""
+        document.getElementById("prevBox").style.backgroundColor = "lightblue"
+        document.getElementById("prevBox").innerHTML = `Previous: <span class="metric">${prev_point[1]}</span>`
+        document.getElementById("prevBox").addEventListener("mouseenter", (e) => {
+            const elem = document.getElementById("prevBox");
+            document.getElementById("prevBox").style.backgroundColor = "#C7F2FF"
+        });
+        document.getElementById("prevBox").addEventListener("mouseout", (e) => {
+            const elem = document.getElementById("prevBox");
+            document.getElementById("prevBox").style.backgroundColor = "lightblue"
+        });
+
+        document.getElementById("prevBox").addEventListener("mouseup", (e) => {
+            window.location.href=`timeline.html?snap=${snapIndex-1}`
+        });
+    }
+
+    if (snapIndex < all_data.length-1) {
+        const next_point = all_data[snapIndex+1];
+        document.getElementById("nextBox").innerText = ""
+        document.getElementById("nextBox").style.backgroundColor = "lightblue"
+        document.getElementById("nextBox").innerHTML = `Next: <span class="metric">${next_point[1]}</span>`
+        document.getElementById("nextBox").addEventListener("mouseenter", (e) => {
+            const elem = document.getElementById("nextBox");
+            document.getElementById("nextBox").style.backgroundColor = "#C7F2FF"
+        });
+        document.getElementById("nextBox").addEventListener("mouseout", (e) => {
+            const elem = document.getElementById("nextBox");
+            document.getElementById("nextBox").style.backgroundColor = "lightblue"
+        });
+        document.getElementById("nextBox").addEventListener("mouseup", (e) => {
+            window.location.href=`timeline.html?snap=${snapIndex+1}`
+        });
+    }
+    function numberWithCommas(x) {
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    const marketCaps = d3.extent(data, (d) => Number(d.volume)*Number(d.price));
+    var dollarFormat = function(d) { return '$' + round2(d) };
+
+    console.log(marketCaps);
+    const selectedData = data.filter(d => (d.datestr === selected_point[1])).map(d => ({...d, marketCap: d.price*d.volume}));
+    const xs = d3.scaleLog(d3.extent(data, (d) => +d.volume), [0, 1000]);
+    const ys = d3.scaleLog(d3.extent(data, (d) => +d.price), [400, 0]);
+    const rs = d3.scaleLog(marketCaps, [2, 40]);
+    var onShow = (d) => tooltip.transition().duration(100).style("opacity", 1);
+    var onExit = (d) => tooltip.transition().duration(150).style("opacity", 0);
+    var onMove = (d) => {
+                        tooltip
+                            .style("left", (event.pageX+10) + "px")
+                            .style("top", (event.pageY-30) + "px")
+                            .html(`<div class="tooltipRoot">
+                                <span>${d.case}</span>
+                                <div class="spacebetween"><span class="metric">${dollarFormat(d.price)}</span><span class="padLeft"> per case</span></div>
+                                <div class="spacebetween"><span class="metric">${numberWithCommas(d.volume)}</span><span class="padLeft"> Cases</span></div>
+                                <div class="spacebetween"><span class="metric">${MoneyFormat(d.marketCap)}</span><span class="padLeft"> Mkt Cap</span></div>
+                                <span class="bluelink">Click to learn more<span></div>`); };
+    var onPointSelect = (d,i) => window.location.href=`case_timeline.html?case=${encodeURI(d.case)}&snap=${snapIndex}`;
+
+    d3.select('svg').append('g').attr('transform', 'translate(50,50)')
+                    .selectAll('circle').data(selectedData).enter().append('circle')
+                    .attr('cx', (d) => xs(d.volume))
+                    .attr('cy', (d) => ys(d.price))
+                    .attr('r', (d) => rs(d.marketCap)/2)
+                    .attr('fill', 'lightblue')
+                    .attr('stroke', 'black')
+                    .on('mouseover', onShow)
+                    .on("mousemove", onMove)                                
+                    .on('mouseleave', onExit)
+                    .on('mouseup', onPointSelect);
+
+    d3.select("svg").append('g').attr('transform', 'translate(50, 450)')
+                .call(d3.axisBottom(xs).tickValues([5, 10, 50, 100, 500, 1000, 5000,10000, 50000, 100000]).tickFormat(numberWithCommas));
+                    
+    d3.select("svg").append('g').attr('transform', 'translate(50,50)')
+                                .call(d3.axisLeft(ys).tickValues([0.03, 0.1, 0.2, 0.5, 1, 2, 10, 20, 50, 90]).tickFormat(dollarFormat));
+    d3.select("svg").append('g').attr('transform', 'translate(650,50)')
+                                .call(d3.axisLeft(rs).tickValues([100, 1000, 10000, 100000, 500000]).tickFormat(numberWithCommas));
+    d3.select("svg").append('g').attr('transform', 'translate(50,50)').append("text")
+        .attr("y", 450)
+        .attr("x", 500)
+        .style("text-anchor", "middle")
+        .style("fill", "black")
+        .text("Quantity On Market ");
+    
+    d3.select("svg").append('g').attr('transform', 'translate(50,50)').append("text")
+        .attr("y", -10)
+        .attr("x", 600)
+        .style("text-anchor", "middle")
+        .style("fill", "black")
+        .text("Case Market Cap (size)");
+ 
+        d3.select("svg").append('g').attr('transform', 'translate(50,50)').append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 0)
+        .attr("x", -175)
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .style("fill", "black")
+        .text("Price Per Case (USD)");
+    
+    let toAnalyze = [selected_point];
+    if (snapIndex > 0) {
+        toAnalyze = [all_data[snapIndex-1], ...toAnalyze];
+    }
+    else {
+        toAnalyze = [[-1, 0, 0], ...toAnalyze]
+    }
+
+    if (snapIndex < all_data.length-1) {
+        toAnalyze = [...toAnalyze, all_data[snapIndex+1]];
+    }
+    else {
+        toAnalyze = [...toAnalyze, [1, 0, 0]];
+    }
+    const xbars = d3.scaleBand().domain(toAnalyze.map(d => d[1])).range([0, 150]);
+    const ybars = d3.scaleLinear(d3.extent(all_data, (d) => +d[2]), [400, 0]);
+                            
+    d3.select("svg").append('g').attr('transform', 'translate(1150,50)')
+        .selectAll('rect').data(toAnalyze).enter().append('rect')
+                    .attr('x', (d, i) => xbars(d[1]))
+                    .attr('y', (d) => ybars(d[2]))
+                    .attr('height', (d) => 400-ybars(d[2]))
+                    .attr('width', (d) => xbars.bandwidth())
+                    .attr('fill', (d, i) => i == 1 ? '#C7F2FF' : 'lightblue')
+                    .attr('stroke', 'black');
+    
+    d3.select('svg').append('g').attr('transform', 'translate(1150,50)')
+        .selectAll('rect').data(toAnalyze).enter().append('text')
+        .attr('x', (d) => xbars(d[1]) + 0.12*xbars.bandwidth())
+        .attr('y', (d) => ybars(d[2])-10)
+        .attr('font-size', 11)
+        .text((d) => `$${MoneyFormat(d[2])}`);
+
+    d3.select("svg").append('g').attr('transform', 'translate(1150, 450)')
+                .call(d3.axisBottom(xbars));
+                    
+    d3.select("svg").append('g').attr('transform', 'translate(1150,50)')
+                                .call(d3.axisLeft(ybars).tickFormat(MoneyFormat));
+    
+    d3.select("svg").append('text')
+      .attr('transform', 'translate(1150,50)')
+      .attr('x', -50)
+      .attr('y', -35)
+      .text('Total Market Cap of Snapshot (USD)')
+
+}
+</script>
+</body>
+</html>       

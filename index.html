@@ -1,0 +1,226 @@
+<html>
+<script src='https://d3js.org/d3.v5.min.js'></script>
+<script src="https://rawgit.com/susielu/d3-annotation/master/d3-annotation.min.js"></script>
+<style>
+    .tooltipRoot{
+        display: grid;
+        gap: 2px;
+    }
+    .metric {
+        font-weight: bold;
+    }
+    .spacebetween {
+        display: flex;
+        justify-content:space-between;
+    }
+    .padLeft {
+        padding-left: 5px;
+    }
+    .analysisBlock {
+        background-color: lightpink;
+        width: 1000px;
+        height: auto;
+        border-color: pink;
+        padding: 10px 0px 0px 10px;
+        border: solid;
+        border-width: 2px;
+        border-radius: 5px;
+    }
+    .bluelink {
+        color: blueviolet;
+    }
+</style>
+<body onload='init()'>
+<h1>Market Cap of All availible CSGO cases</h1>
+<p>Understand how the market cap of the CSGO Economy as a whole has changed bianually</p>
+<p>How does the market cap of markets and individual items change with time and quantity?</p>  
+    For each CSGO case tradable on the market, a sample was taken on June 1 and Jan 1 of the year if availible.  We will provide insights on a yearly basis and insights on a per case basis.
+</p>
+
+
+<svg width=1200 height=600></svg>
+<div id = "tooltip"></div>
+<div class="analysisBlock">Analysis: The Market Cap of CSGO section of the steam market place has risen and fallen at different points in the games lifecycle.  The first peak corresponds to one of the player peaks in CSGO, when it won plethora of awards, following it into a massive slump.  While the game was not necessarily revived, the announcement of CS:GO 2, and the fact that crates would be transferable from the original game provided a much needed refuel into the market with the valuation at an all time high.</p>
+<script>
+async function init() {
+    const data = await d3.csv(
+        'https://gist.githubusercontent.com/ashdawngary/526a81dc3e337ff075f89e0cfe4b9075/raw/cb60ce07b4290881badd3cca1c0f21bfb42ff17d/case_samples.csv',
+        (d) => 
+        ({
+            date: d3.timeParse("%m/%d/%Y")(d.date),
+            datestr: d.date,
+            case: d.case,
+            price: +d.price,
+            volume: +d.volume
+        }));
+
+    function round2(num) {
+        return Math.round(num * 100) / 100;
+    }
+    
+    function MoneyFormat(labelValue) 
+    {
+    return Math.abs(Number(labelValue)) >= 1.0e+9
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+9) + "B"
+        // Six Zeroes for Millions 
+        : Math.abs(Number(labelValue)) >= 1.0e+6
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+6) + "M"
+        // Three Zeroes for Thousands
+        : Math.abs(Number(labelValue)) >= 1.0e+3
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+3) + "K"
+
+        : round2(Math.abs(Number(labelValue)));
+
+    }
+    function numberWithCommas(x) {
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    var all_dates = data.map(d => d.datestr);
+    var map_dates = [...new Set(all_dates)];
+
+    var volumes = map_dates.map(d => data.filter(dp => (dp.datestr === d)).reduce((a, b) => a + b.volume, 0))
+    var marketCap = map_dates.map(d => data.filter(dp => (dp.datestr === d)).reduce((a, b) => a + b.volume * b.price, 0))
+    var numPlayers = map_dates.map(d => data.filter(dp => (dp.datestr === d)).length)
+
+    const zip = (...arrays) => {
+    const length = Math.min(...arrays.map(arr => arr.length));
+    return Array.from({ length }, (value, index) => arrays.map((array => array[index])));
+    };
+
+    const original_dates = map_dates.map(mpd => data.find(dp => (dp.datestr === mpd)).date);
+
+    const all_data = zip(original_dates, map_dates, volumes, marketCap, numPlayers).sort((a, b) => a[0]-b[0]);
+
+    var xs = d3.scaleBand().domain(all_data.map(x => x[1])).range([0, 1000])
+    var ys = d3.scaleLinear().domain(d3.extent(all_data, (d) => +d[3])).range([400,0]);
+
+    var tooltip = d3.select('#tooltip')
+                    .style("opacity", 0)
+                    .style('position', 'absolute')
+                    .attr("class", "tooltip")
+                    .style("background-color", "#eafbea")
+                    .style("border", "solid")
+                    .style("border-width", "1px")
+                    .style("border-radius", "5px")
+                    .style("border-color", '#D3D3D3')
+                    .style("padding", "5px");
+
+
+    var onShow = (d) => tooltip.transition().duration(100).style("opacity", 1);
+    var onExit = (d) => tooltip.transition().duration(150).style("opacity", 0);
+    var onMove = (d) => {
+                        tooltip
+                            .style("left", (event.pageX+10) + "px")
+                            .style("top", (event.pageY-30) + "px")
+                            .html(`<div class="tooltipRoot">
+                                <span>${d[1]}</span>
+                                <div class="spacebetween"><span class="metric">${d[4]}</span><span class="padLeft"> Variants</span></div>
+                                <div class="spacebetween"><span class="metric">${numberWithCommas(d[2])}</span><span class="padLeft"> Cases</span></div>
+                                <div class="spacebetween"><span class="metric">${MoneyFormat(d[3])}</span><span class="padLeft"> Mkt Cap</span></div>
+                                <span class="bluelink">Click to learn more<span></div>`); };
+
+    var onPointSelect = (d,i) => window.location.href=`timeline.html?snap=${i}`;
+
+    d3.select('svg').append('g').attr('transform', 'translate(50,50)')
+                    .selectAll('rect').data(all_data).enter().append('rect')
+                    .attr('x', (d) => xs(d[1]))
+                    .attr('y', (d) => ys(d[3]))
+                    .attr('height', (d) => 400-ys(d[3]))
+                    .attr('width', (d) => xs.bandwidth())
+                    .attr('fill', 'lightblue')
+                    .attr('stroke', 'black')
+                    .on('mouseover', onShow)
+                    .on("mousemove", onMove)                                
+                    .on('mouseleave', onExit)
+                    .on('click', onPointSelect);
+
+    d3.select('svg').append('g').attr('transform', 'translate(50,50)')
+        .selectAll('rect').data(all_data).enter().append('text')
+        .attr('x', (d) => xs(d[1]) + 0.35*xs.bandwidth())
+        .attr('y', (d) => ys(d[3])-10)
+        .text((d) => `${d[4]}`)
+        .on('mouseover', onShow)
+        .on("mousemove", onMove)                                
+        .on('mouseleave', onExit)
+        .on('click', onPointSelect);
+
+
+    d3.select("svg").append('g').attr('transform', 'translate(50, 450)')
+                                .call(d3.axisBottom(xs));
+                    
+    d3.select("svg").append('g').attr('transform', 'translate(50,50)')
+                                .call(d3.axisLeft(ys));
+    
+    d3.select("svg").append('g').attr('transform', 'translate(50,50)').append("text")
+    .attr("y", 450)
+    .attr("x", 500)
+    .style("text-anchor", "middle")
+    .style("fill", "black")
+    .text("Sample Checkpoint (Biannually)");
+
+    d3.select("svg").append('g').attr('transform', 'translate(50,50)').append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("y", 0)
+    .attr("x", -175)
+    .attr("dy", "1em")
+    .style("text-anchor", "middle")
+    .style("fill", "black")
+    .text("Market Cap (USD)");
+    
+    const type = d3.annotationLabel
+    const annotations = [
+        { type: d3.annotationCalloutElbow,
+        connector: { end: "arrow" },
+        note: { 
+            title: "Initial Rise of CS:GO",
+            label: "Dramatic increase of players combined with the release of many crate variants created large market growth.",
+            wrap: 300
+        },
+        x: 100,
+        y: 110,
+        dx: 57,
+        dy: -50,
+        color: "#cc9933"
+        },
+        { type: d3.annotationCalloutElbow,
+        connector: { end: "arrow" },
+        note: { 
+            title: "Announcement of CS:GO 2",
+            label: "With CS:GO2 announcement and the guarantee of crates transferring, the market is reignited.",
+            wrap: 300
+        },
+        x: 940,
+        y: 50,
+        dx: -150,
+        dy: -10,
+        color: "#cc9933"
+        },
+        { type: d3.annotationCalloutElbow,
+        connector: { end: "arrow" },
+        note: { 
+            title: "Stagnation of CS:GO",
+            label: "A lack of new features and mechanics led to a large attrition of the playerbase, who got tired of the same strategies and maps.",
+            wrap: 300
+        },
+        x: 450,
+        y: 350,
+        dx: 0,
+        dy: -100,
+        color: "#cc9933"
+        },
+    ];
+    
+    const parseTime = d3.timeParse("%m/%d/%Y")
+    const timeFormat = d3.timeFormat("%m/%d/%Y")
+    const makeAnnotations = d3.annotation()
+        .annotations(annotations)
+    d3.select("svg")
+        .append("g").attr('transform', 'translate(50,50)')
+        .call(makeAnnotations)
+}
+</script>
+</body>
+</html>       

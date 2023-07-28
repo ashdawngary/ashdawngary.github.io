@@ -1,0 +1,238 @@
+<html>
+<script src='https://d3js.org/d3.v5.min.js'></script>
+<script src="https://rawgit.com/susielu/d3-annotation/master/d3-annotation.min.js"></script>
+<style>
+    .dispFlex {
+        display: flex;
+    }
+    .analysisBlock {
+        background-color: lightpink;
+        width: 300px;
+        height: auto;
+        border-color: pink;
+        padding: 10px 10px 10px 10px;
+        border: solid;
+        border-width: 2px;
+        border-radius: 5px;
+    }
+    .rightBlock {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .metric {
+        font-weight: bold;
+    }
+    .spaceBetween {
+        display: flex;
+        justify-content: space-between;
+    }
+</style>
+<body onload='init()'>
+<div class="spaceBetween"><h1>A deep dive on <span id="caseInQuestion"></span></h1><div><a href="index.html">Main slide</a><br/><a id="snapshotReturn">Back to timeline</a></div></div>
+<p id="couldBeAnError">Understand how the quantity, price, and market cap of a crate vary throughout time.</p>
+<div class="dispFlex"><svg width=1400 height=300 id="priceChart"></svg><div class="rightBlock"><div id="priceAnalysis" class="analysisBlock">Some initial Analysis</div></div></div>
+<div class="dispFlex"><svg width=1400 height=300 id="volumeChart"></svg><div class="rightBlock"><div id="volumeAnalysis" class="analysisBlock">Some initial Analysis</div></div></div>
+<div class="dispFlex"><svg width=1400 height=300 id="mktCapChart"></svg><div class="rightBlock"><div id="mktAnalysis" class="analysisBlock">Some initial Analysis</div></div></div>
+<div id = "tooltip"></div>
+<script>
+function priceAnalysis(iprice, eprice, lowprice, ldate, hprice, hdate) {
+    function round2(num) {
+        return Math.round(num * 100) / 100;
+    }
+    const metricspan = (t) => `<span class="metric">${t}</span>`;
+    const pcentchange = (eprice-iprice)/iprice * 100.0;
+    const analysisStartEnd = `The price of this case has ${metricspan(pcentchange > 0 ? 'increased' : 'decreased')} by ${metricspan(round2(pcentchange))}%</span> from its release(${metricspan(iprice)}) to current day(${metricspan(eprice)}).`
+    const lowComment = `It achieved a low on ${metricspan(ldate)} for ${metricspan('$' + round2(lowprice))} and a high on ${metricspan(hdate)} for ${metricspan('$' + round2(hprice))}.`
+    
+    return `${analysisStartEnd} ${lowComment}`;
+}
+
+function volumeAnalysis(iprice, eprice, lowprice, ldate, hprice, hdate) {
+    function round2(num) {
+        return Math.round(num * 100) / 100;
+    }
+    function numberWithCommas(x) {
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    const metricspan = (t) => `<span class="metric">${t}</span>`;
+    const pcentchange = (eprice-iprice)/iprice * 100.0;
+    const analysisStartEnd = `The volume of this case has ${metricspan(pcentchange > 0 ? 'increased' : 'decreased')} by ${metricspan(round2(pcentchange))}%</span> from its release(${metricspan(numberWithCommas(iprice))}) to current day(${metricspan(numberWithCommas(eprice))}).`
+    const lowComment = `It was most scarce on ${metricspan(ldate)} with ${metricspan(numberWithCommas(lowprice) + ' crates')} and most plentiful on ${metricspan(hdate)} with ${metricspan(numberWithCommas(hprice) + ' crates')}.`
+    return `${analysisStartEnd} ${lowComment}`;
+}
+
+function mktAnalysis(iprice, eprice, lowprice, ldate, hprice, hdate) {
+    function round2(num) {
+        return Math.round(num * 100) / 100;
+    }
+    function MoneyFormat(labelValue) 
+    {
+    // Nine Zeroes for Billions
+    return Math.abs(Number(labelValue)) >= 1.0e+9
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+9) + "B"
+        // Six Zeroes for Millions 
+        : Math.abs(Number(labelValue)) >= 1.0e+6
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+6) + "M"
+        // Three Zeroes for Thousands
+        : Math.abs(Number(labelValue)) >= 1.0e+3
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+3) + "K"
+
+        : round2(Math.abs(Number(labelValue)));
+
+    }
+    const metricspan = (t) => `<span class="metric">${t}</span>`;
+    const pcentchange = (eprice-iprice)/iprice * 100.0;
+    const analysisStartEnd = `The market cap of this case has ${metricspan(pcentchange > 0 ? 'increased' : 'decreased')} by ${metricspan(round2(pcentchange))}%</span> from its release(${metricspan(MoneyFormat(iprice))}) to current day(${metricspan(MoneyFormat(eprice))}).`
+    const lowComment = `It was weakest on ${metricspan(ldate)} at ${metricspan(MoneyFormat(lowprice) + ' valuation')} and strongest on ${metricspan(hdate)} with ${metricspan(MoneyFormat(hprice) + ' valuation')}.`
+    return `${analysisStartEnd} ${lowComment}`;
+}
+
+async function init() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const caseSearch = urlParams.get('case');
+    const snapBack = urlParams.get('snap')||0;
+    document.getElementById("snapshotReturn").href = `timeline.html?snap=${snapBack}`;
+    document.getElementById("caseInQuestion").innerText = caseSearch;
+    function round2(num) {
+        return Math.round(num * 100) / 100;
+    }
+    function MoneyFormat(labelValue) 
+    {
+    // Nine Zeroes for Billions
+    return Math.abs(Number(labelValue)) >= 1.0e+9
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+9) + "B"
+        // Six Zeroes for Millions 
+        : Math.abs(Number(labelValue)) >= 1.0e+6
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+6) + "M"
+        // Three Zeroes for Thousands
+        : Math.abs(Number(labelValue)) >= 1.0e+3
+
+        ? round2(Math.abs(Number(labelValue)) / 1.0e+3) + "K"
+
+        : round2(Math.abs(Number(labelValue)));
+
+    }
+    function numberWithCommas(x) {
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    const data = await d3.csv(
+    'https://gist.githubusercontent.com/ashdawngary/526a81dc3e337ff075f89e0cfe4b9075/raw/cb60ce07b4290881badd3cca1c0f21bfb42ff17d/case_samples.csv',
+    function(d) {
+        return {
+                date: d3.timeParse("%m/%d/%Y")(d.date),
+                datestr: d.date,
+                case: d.case,
+                price: +d.price,
+                volume: +d.volume
+            }
+    });
+    var tooltip = d3.select('#tooltip')
+                    .style("opacity", 0)
+                    .style('position', 'absolute')
+                    .attr("class", "tooltip")
+                    .style("background-color", "#eafbea")
+                    .style("border", "solid")
+                    .style("border-width", "2px")
+                    .style("border-radius", "5px")
+                    .style("border-color", '#D3D3D3')
+                    .style("padding", "5px");
+    
+    const case_data = data
+        .filter(dp => (dp.case === caseSearch)).sort((a, b) => a.date-b.date)
+        .map(dp => ({...dp, marketCap: +dp.price * dp.volume}));
+
+    if (case_data.length === 0) {
+        document.getElementById("couldBeAnError").innerText = `Unable to find any data on crate: ${caseSearch}`;
+        return;
+    }
+    
+    var pext = d3.extent(case_data, (d) => +d.price);
+    pext[0] -= 0.01
+    var xps = d3.scaleBand().domain(case_data.map(x => x.datestr)).range([0, 1000])
+    var yps= d3.scaleLog(pext, [200,0]);
+
+    d3.select("#priceChart").append('g').attr('transform', 'translate(50,50)').append('path')
+                                .datum(case_data).attr('fill','none')
+                                .attr('stroke','blue').attr('stroke-width',2)
+                                .attr('d',d3.line().x(function(d) { return xps(d.datestr)+ xps.bandwidth()/2})
+                                                   .y(function(d) { return yps(+d.price)}));
+    d3.select("#priceChart").append('g').attr('transform', 'translate(50,250)')
+        .call(d3.axisBottom(xps));
+                
+    d3.select("#priceChart").append('g').attr('transform', 'translate(50,50)')
+                                .call(d3.axisLeft(yps).ticks(10).tickFormat(round2));
+    d3.select("#priceChart").append('text')
+      .attr('transform', 'translate(500,50)')
+      .attr('x', -50)
+      .attr('y', -35)
+      .text(`Price Over Time (${case_data[0].datestr} to ${case_data[case_data.length-1].datestr})`)
+    
+    var yvs= d3.scaleLog(d3.extent(case_data, (d) => +d.volume), [200,0]);
+
+    d3.select("#volumeChart").append('g').attr('transform', 'translate(50,50)').append('path')
+                                .datum(case_data).attr('fill','none')
+                                .attr('stroke','blue').attr('stroke-width',2)
+                                .attr('d',d3.line().x(function(d) { return xps(d.datestr) + xps.bandwidth()/2})
+                                                   .y(function(d) { return yvs(+d.volume)}));
+    d3.select("#volumeChart").append('g').attr('transform', 'translate(50,250)')
+        .call(d3.axisBottom(xps));
+                
+    d3.select("#volumeChart").append('g').attr('transform', 'translate(50,50)')
+                                .call(d3.axisLeft(yvs).ticks(10).tickFormat(numberWithCommas));
+    
+    d3.select("#volumeChart").append('text')
+      .attr('transform', 'translate(500,50)')
+      .attr('x', -50)
+      .attr('y', -35)
+      .text(`Volume Over Time (${case_data[0].datestr} to ${case_data[case_data.length-1].datestr})`)
+    var yms= d3.scaleLog(d3.extent(case_data, (d) => +d.marketCap), [200,0]);
+    d3.select("#mktCapChart").append('g').attr('transform', 'translate(50,50)').append('path')
+                                .datum(case_data).attr('fill','none')
+                                .attr('stroke','blue').attr('stroke-width',2)
+                                .attr('d',d3.line().x(function(d) { return xps(d.datestr) + xps.bandwidth()/2})
+                                                   .y(function(d) { return yms(+d.marketCap)}));
+    d3.select("#mktCapChart").append('g').attr('transform', 'translate(50,250)')
+        .call(d3.axisBottom(xps));
+                
+    d3.select("#mktCapChart").append('g').attr('transform', 'translate(50,50)')
+                                .call(d3.axisLeft(yms).ticks(10).tickFormat(MoneyFormat));
+    d3.select("#mktCapChart").append('text')
+      .attr('transform', 'translate(500,50)')
+      .attr('x', -50)
+      .attr('y', -35)
+      .text(`Market Cap Over Time (${case_data[0].datestr} to ${case_data[case_data.length-1].datestr})`)
+
+    const iPrice = case_data[0].price;
+    const ePrice = case_data[case_data.length-1].price;
+    const lowEnt = case_data.reduce((prev, curr) => +prev.price < +curr.price ? prev : curr);
+    const hiEnt = case_data.reduce((prev, curr) => +prev.price > +curr.price ? prev : curr);
+
+    const strPA = priceAnalysis(iPrice, ePrice, lowEnt.price, lowEnt.datestr, hiEnt.price, hiEnt.datestr);
+    document.getElementById("priceAnalysis").innerHTML = strPA;
+
+
+    const iv = case_data[0].volume;
+    const ev = case_data[case_data.length-1].volume;
+    const lv = case_data.reduce((prev, curr) => +prev.volume < +curr.volume ? prev : curr);
+    const hv = case_data.reduce((prev, curr) => +prev.volume > +curr.volume ? prev : curr);
+
+    const strVA = volumeAnalysis(iv, ev, lv.volume, lv.datestr, hv.volume, hv.datestr);
+    document.getElementById("volumeAnalysis").innerHTML = strVA;
+    
+    const im = case_data[0].marketCap;
+    const em = case_data[case_data.length-1].marketCap;
+    const lm = case_data.reduce((prev, curr) => +prev.marketCap < +curr.marketCap ? prev : curr);
+    const hm = case_data.reduce((prev, curr) => +prev.marketCap > +curr.marketCap ? prev : curr);
+
+    const strMA = mktAnalysis(im, em, lm.marketCap, lm.datestr, hm.marketCap, hm.datestr);
+    document.getElementById("mktAnalysis").innerHTML = strMA;
+    }
+</script>
+</body>
+</html>
